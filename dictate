@@ -1,0 +1,398 @@
+#!/usr/bin/env python3
+
+import sounddevice as sd
+import numpy as np
+import whisper
+import queue
+import threading
+import subprocess
+import sys
+import argparse
+import os
+from pynput import keyboard
+from pynput.keyboard import Controller as KeyboardController
+import time
+import logging
+from datetime import datetime
+
+# Configuration
+SAMPLE_RATE = 16000
+BUFFER_SIZE = 1024
+DEFAULT_HOTKEY = '<home>'  # Home key (XF86HomePage)
+LOG_FILE = os.path.expanduser('~/dictate.log')
+
+# Global state
+audio_queue = queue.Queue()
+is_recording = False
+recording_lock = threading.Lock()
+stop_flag = threading.Event()
+model = None
+use_notifications = True
+auto_paste = True
+kbd_controller = None
+target_window_id = None
+logger = None
+last_activity = None
+health_check_enabled = True
+
+def setup_logging():
+    """Setup logging to both file and console."""
+    global logger
+    logger = logging.getLogger('dictate')
+    logger.setLevel(logging.DEBUG)
+
+    # File handler with detailed logs
+    fh = logging.FileHandler(LOG_FILE)
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(logging.Formatter(
+        '%(asctime)s [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    ))
+
+    # Console handler with minimal logs
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(logging.Formatter('%(message)s'))
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    logger.info("=" * 60)
+    logger.info("Dictate started")
+    logger.info("=" * 60)
+
+def notify(title, message, urgency="normal"):
+    """Send desktop notification using notify-send."""
+    if not use_notifications:
+        return
+    try:
+        subprocess.run(['notify-send', '-u', urgency, title, message],
+                      timeout=1, stderr=subprocess.DEVNULL)
+    except:
+        pass
+
+def paste_text(text):
+    """Type or paste text into focused window."""
+    global target_window_id
+
+    try:
+        # Wait to ensure clipboard is fully updated
+        time.sleep(0.3)
+
+        # Use the window captured at recording start
+        window_id = target_window_id
+        if not window_id:
+            # Fallback: get current window
+            try:
+                result = subprocess.run(['xdotool', 'getwindowfocus'],
+                                      capture_output=True,
+                                      timeout=2)
+                window_id = result.stdout.decode().strip()
+            except:
+                window_id = None
+
+        # Try xdotool type (directly types the text, more reliable than paste)
+        if window_id:
+            try:
+                # Focus the window first
+                subprocess.run(['xdotool', 'windowfocus', '--sync', window_id],
+                             capture_output=True,
+                             timeout=2)
+                time.sleep(0.2)
+
+                # Directly type the text
+                result = subprocess.run(['xdotool', 'type', '--window', window_id, '--clearmodifiers', '--', text],
+                                      capture_output=True,
+                                      timeout=5)
+
+                if result.returncode == 0:
+                    time.sleep(0.2)
+                    return True
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+
+        # Fallback to pynput typing
+        global kbd_controller
+        if kbd_controller is None:
+            kbd_controller = KeyboardController()
+        time.sleep(0.2)
+        kbd_controller.type(text)
+        time.sleep(0.2)
+        return True
+    except Exception as e:
+        print(f"✗ Failed to insert text: {e}")
+        return False
+
+def audio_callback(indata, frames, time, status):
+    """Callback for audio stream - captures audio when recording."""
+    with recording_lock:
+        if is_recording:
+            audio_queue.put(indata.copy())
+
+def transcribe_audio():
+    """Thread to transcribe audio when recording stops and copy to clipboard."""
+    global model
+
+    try:
+        while not stop_flag.is_set():
+            # Wait until we have audio to process
+            if audio_queue.qsize() == 0:
+                stop_flag.wait(0.1)
+                continue
+
+            # Wait a bit to make sure recording has stopped and all audio is queued
+            stop_flag.wait(0.3)
+
+            with recording_lock:
+                if is_recording:
+                    continue
+
+                # Collect all audio data
+                audio_data = []
+                while not audio_queue.empty():
+                    try:
+                        audio_data.append(audio_queue.get_nowait())
+                    except queue.Empty:
+                        break
+
+                if len(audio_data) == 0:
+                    continue
+
+                audio_array = np.concatenate(audio_data)
+
+            notify("Dictate", "Transcribing...")
+
+            try:
+                result = model.transcribe(audio_array.flatten(), language="en", fp16=False)
+                text = result["text"].strip()
+
+                if text:
+                    # Copy text to clipboard using xclip
+                    try:
+                        subprocess.run(['xclip', '-selection', 'clipboard'],
+                                     input=text.encode(),
+                                     check=True,
+                                     timeout=2)
+                        # Also copy to primary selection
+                        subprocess.run(['xclip', '-selection', 'primary'],
+                                     input=text.encode(),
+                                     timeout=2)
+
+                        # Auto-paste if enabled
+                        if auto_paste:
+                            if paste_text(text):
+                                notify("Dictate", f"Inserted: {text[:50]}{'...' if len(text) > 50 else ''}")
+                            else:
+                                notify("Dictate", f"Copied: {text[:50]}{'...' if len(text) > 50 else ''}")
+                        else:
+                            notify("Dictate", f"Copied: {text[:50]}{'...' if len(text) > 50 else ''}")
+                    except Exception as e:
+                        notify("Dictate", "Failed to copy to clipboard", "critical")
+                else:
+                    notify("Dictate", "No speech detected", "low")
+            except Exception as e:
+                notify("Dictate", f"Error: {str(e)[:50]}", "critical")
+    except Exception as e:
+        pass
+    finally:
+        pass
+
+def health_check_thread():
+    """Monitor system health and log periodic heartbeats."""
+    global last_activity
+
+    try:
+        while not stop_flag.is_set():
+            stop_flag.wait(60)  # Check every minute
+    except Exception as e:
+        pass
+    finally:
+        pass
+
+def on_press(key):
+    """Handle global hotkey press."""
+    global is_recording, target_window_id, last_activity
+
+    try:
+        last_activity = time.time()
+
+        # Log all key presses for debugging
+        logger.debug(f"Key pressed: {repr(key)} (type: {type(key).__name__})")
+        if hasattr(key, 'vk'):
+            logger.debug(f"  VK code: {hex(key.vk)}")
+
+        # Home key detection - check multiple ways
+        is_home_key = False
+
+        # Method 1: Check by virtual key code (XF86HomePage)
+        if hasattr(key, 'vk') and key.vk == 0x1008ff18:
+            is_home_key = True
+            logger.debug("  Home key detected by VK code")
+
+        # Method 2: Check by string representation
+        key_str = str(key)
+        if 'home' in key_str.lower() or 'xf86homepage' in key_str.lower():
+            is_home_key = True
+            logger.debug("  Home key detected by string representation")
+
+        # Method 3: Check if it's keyboard.Key.home
+        try:
+            if key == keyboard.Key.home:
+                is_home_key = True
+                logger.debug("  Home key detected by keyboard.Key.home")
+        except:
+            pass
+
+        if is_home_key:
+            with recording_lock:
+                # Only start recording if not already recording (ignore key repeat)
+                if not is_recording:
+                    logger.info("HOME KEY PRESSED - Starting recording")
+                    # Capture the focused window NOW, before recording starts
+                    try:
+                        result = subprocess.run(['xdotool', 'getwindowfocus'],
+                                              capture_output=True,
+                                              timeout=1)
+                        target_window_id = result.stdout.decode().strip()
+                    except:
+                        target_window_id = None
+
+                    is_recording = True
+                    notify("Dictate", "Recording...", "low")
+                else:
+                    logger.debug("  Ignoring key repeat - already recording")
+    except Exception as e:
+        logger.error(f"Error in on_press: {e}")
+
+def on_release(key):
+    """Handle global hotkey release."""
+    global is_recording, last_activity
+
+    try:
+        last_activity = time.time()
+
+        # Log key release for debugging
+        logger.debug(f"Key released: {repr(key)} (type: {type(key).__name__})")
+
+        # Home key detection - check multiple ways (same as on_press)
+        is_home_key = False
+
+        # Method 1: Check by virtual key code (XF86HomePage)
+        if hasattr(key, 'vk') and key.vk == 0x1008ff18:
+            is_home_key = True
+            logger.debug("  Home key detected by VK code")
+
+        # Method 2: Check by string representation
+        key_str = str(key)
+        if 'home' in key_str.lower() or 'xf86homepage' in key_str.lower():
+            is_home_key = True
+            logger.debug("  Home key detected by string representation")
+
+        # Method 3: Check if it's keyboard.Key.home
+        try:
+            if key == keyboard.Key.home:
+                is_home_key = True
+                logger.debug("  Home key detected by keyboard.Key.home")
+        except:
+            pass
+
+        if is_home_key:
+            logger.info("HOME KEY RELEASED - Stopping recording")
+            with recording_lock:
+                if is_recording:
+                    is_recording = False
+
+        # Note: ESC quit removed - use Ctrl+C in the terminal to quit
+    except Exception as e:
+        logger.error(f"Error in on_release: {e}")
+
+def main():
+    global model, use_notifications, auto_paste
+
+    parser = argparse.ArgumentParser(
+        description='Push-to-talk voice transcription with global hotkey',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  dictate              # Run with default settings (Home key)
+  dictate --no-notify  # Run without desktop notifications
+  dictate --no-paste   # Copy to clipboard only, don't auto-paste
+
+Global Hotkey: Home key (press and hold to record, release to transcribe)
+Quit: Press Ctrl+C in the terminal
+        """
+    )
+    parser.add_argument('--no-notify', action='store_true',
+                       help='Disable desktop notifications')
+    parser.add_argument('--no-paste', action='store_true',
+                       help='Disable auto-paste (copy to clipboard only)')
+    parser.add_argument('--model', default='base',
+                       choices=['tiny', 'base', 'small', 'medium', 'large'],
+                       help='Whisper model size (default: base)')
+
+    args = parser.parse_args()
+    use_notifications = not args.no_notify
+    auto_paste = not args.no_paste
+
+    # Setup logging
+    setup_logging()
+
+    # Load Whisper model
+    print(f"Loading Whisper model ({args.model})...")
+    model = whisper.load_model(args.model)
+    print("Model loaded!")
+
+    # Start the transcription thread
+    transcription_thread = threading.Thread(target=transcribe_audio, daemon=True)
+    transcription_thread.start()
+
+    # Start health check thread
+    health_thread = threading.Thread(target=health_check_thread, daemon=True)
+    health_thread.start()
+
+    # Start audio stream
+    try:
+        with sd.InputStream(callback=audio_callback, channels=1,
+                           samplerate=SAMPLE_RATE, blocksize=BUFFER_SIZE):
+            print("\n🎤 Global Push-to-Talk Ready!")
+            print("Hold HOME KEY to record (works system-wide)")
+            if auto_paste:
+                print("Auto-paste: ENABLED (use --no-paste to disable)")
+            else:
+                print("Auto-paste: DISABLED")
+            print("Press Ctrl+C to quit\n")
+
+            notify("Dictate", "Ready! Hold Home key to record", "low")
+
+            # Start global keyboard listener
+            try:
+                with keyboard.Listener(on_press=on_press, on_release=on_release, suppress=False) as listener:
+                    # Monitor the listener
+                    while listener.running and not stop_flag.is_set():
+                        stop_flag.wait(1)
+
+                    listener.join()
+            except Exception as e:
+                raise
+
+    except KeyboardInterrupt:
+        print("\n\nStopping...")
+    except Exception as e:
+        notify("Dictate", f"Error: {e}", "critical")
+        sys.exit(1)
+    finally:
+        stop_flag.set()
+        time.sleep(0.5)  # Give threads time to finish
+
+        # Clean up keyboard controller
+        global kbd_controller
+        if kbd_controller is not None:
+            try:
+                del kbd_controller
+            except:
+                pass
+
+        print("Stopped.")
+
+if __name__ == "__main__":
+    main()
