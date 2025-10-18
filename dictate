@@ -29,6 +29,7 @@ stop_flag = threading.Event()
 model = None
 use_notifications = True
 auto_paste = True
+append_enter_cr = True
 kbd_controller = None
 target_window_id = None
 logger = None
@@ -165,6 +166,11 @@ def transcribe_audio():
             try:
                 result = model.transcribe(audio_array.flatten(), language="en", fp16=False)
                 text = result["text"].strip()
+
+                # Append carriage return by default (unless disabled)
+                if text and append_enter_cr:
+                    text = text + "\r"
+                    logger.debug(f"Appending carriage return to text")
 
                 if text:
                     # Copy text to clipboard using xclip
@@ -307,18 +313,20 @@ def on_release(key):
         logger.error(f"Error in on_release: {e}")
 
 def main():
-    global model, use_notifications, auto_paste
+    global model, use_notifications, auto_paste, append_enter_cr
 
     parser = argparse.ArgumentParser(
         description='Push-to-talk voice transcription with global hotkey',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  dictate              # Run with default settings (Home key)
-  dictate --no-notify  # Run without desktop notifications
-  dictate --no-paste   # Copy to clipboard only, don't auto-paste
+  dictate                # Run with default settings (Home key)
+  dictate --no-notify    # Run without desktop notifications
+  dictate --no-paste     # Copy to clipboard only, don't auto-paste
+  dictate --no-enter-cr  # Disable automatic carriage return (\\r)
 
 Global Hotkey: Home key (press and hold to record, release to transcribe)
+Default Behavior: Carriage return (\\r) is automatically appended to all text
 Quit: Press Ctrl+C in the terminal
         """
     )
@@ -326,6 +334,8 @@ Quit: Press Ctrl+C in the terminal
                        help='Disable desktop notifications')
     parser.add_argument('--no-paste', action='store_true',
                        help='Disable auto-paste (copy to clipboard only)')
+    parser.add_argument('--no-enter-cr', action='store_true',
+                       help='Disable automatic carriage return (\\r) appended to all text')
     parser.add_argument('--model', default='base',
                        choices=['tiny', 'base', 'small', 'medium', 'large'],
                        help='Whisper model size (default: base)')
@@ -333,6 +343,7 @@ Quit: Press Ctrl+C in the terminal
     args = parser.parse_args()
     use_notifications = not args.no_notify
     auto_paste = not args.no_paste
+    append_enter_cr = not args.no_enter_cr
 
     # Setup logging
     setup_logging()
@@ -360,6 +371,10 @@ Quit: Press Ctrl+C in the terminal
                 print("Auto-paste: ENABLED (use --no-paste to disable)")
             else:
                 print("Auto-paste: DISABLED")
+            if append_enter_cr:
+                print("Auto carriage return: ENABLED - \\r appended to all text (use --no-enter-cr to disable)")
+            else:
+                print("Auto carriage return: DISABLED")
             print("Press Ctrl+C to quit\n")
 
             notify("Dictate", "Ready! Hold Home key to record", "low")
