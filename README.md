@@ -5,7 +5,7 @@ A system-wide push-to-talk voice transcription tool that uses OpenAI's Whisper m
 ## Features
 
 - **Global Hotkey**: Works from anywhere, no window focus required
-- **Push-to-Talk**: Hold Windows key to record, release to transcribe
+- **Push-to-Talk**: Hold Home key to record, release to transcribe
 - **Auto-Insert**: Automatically types transcribed text into focused window
 - **Clipboard Integration**: Also copies transcriptions to clipboard
 - **Desktop Notifications**: Visual feedback for recording/transcription status
@@ -36,7 +36,7 @@ dictate --no-paste         # Copy to clipboard only, don't auto-insert
 ```
 
 ### Controls
-- **Windows Key**: Hold to record, release to transcribe and insert
+- **Home Key**: Hold to record, release to transcribe and insert
 - **ESC**: Quit the application
 
 ## How It Works
@@ -44,9 +44,9 @@ dictate --no-paste         # Copy to clipboard only, don't auto-insert
 1. Start `dictate` in a terminal
 2. The Whisper model loads (may take a few seconds)
 3. Click into any text field or editor
-4. Hold Windows key from anywhere on your system
+4. Hold Home key from anywhere on your system
 5. Speak into your microphone
-6. Release Windows key
+6. Release Home key
 7. Wait a moment for transcription
 8. Text is automatically typed into the focused window
 9. Text is also copied to clipboard for manual pasting
@@ -116,7 +116,7 @@ X-GNOME-Autostart-enabled=true
 - First transcription after launch may be slower (model warmup)
 - Speak clearly and at normal pace for best results
 - For long dictation, pause briefly between thoughts
-- Windows key works system-wide without conflicting with most shortcuts
+- Home key works system-wide without conflicting with most shortcuts
 - Use `--no-paste` if you prefer manual pasting only
 
 ## Technical Details
