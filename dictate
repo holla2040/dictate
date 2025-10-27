@@ -20,6 +20,7 @@ SAMPLE_RATE = 16000
 BUFFER_SIZE = 1024
 DEFAULT_HOTKEY = '<home>'  # Home key (XF86HomePage)
 LOG_FILE = os.path.expanduser('~/dictate.log')
+PID_FILE = os.path.expanduser('~/dictate.pid')
 
 # Global state
 audio_queue = queue.Queue()
@@ -35,6 +36,42 @@ target_window_id = None
 logger = None
 last_activity = None
 health_check_enabled = True
+
+def check_single_instance():
+    """Check if another instance is running and kill it if necessary."""
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, 'r') as f:
+                old_pid = int(f.read().strip())
+
+            # Check if process is still running
+            try:
+                os.kill(old_pid, 0)  # Signal 0 just checks if process exists
+                # Process exists, kill it
+                print(f"Found existing dictate process (PID {old_pid}), stopping it...")
+                os.kill(old_pid, 15)  # SIGTERM
+                time.sleep(0.5)
+
+                # Check if it's still running, force kill if needed
+                try:
+                    os.kill(old_pid, 0)
+                    print(f"Process didn't stop, force killing...")
+                    os.kill(old_pid, 9)  # SIGKILL
+                    time.sleep(0.3)
+                except OSError:
+                    pass  # Process is gone
+
+                print(f"Previous instance stopped.")
+            except OSError:
+                # Process doesn't exist, just clean up stale PID file
+                pass
+        except (ValueError, IOError):
+            # Invalid PID file, ignore
+            pass
+
+    # Write our PID
+    with open(PID_FILE, 'w') as f:
+        f.write(str(os.getpid()))
 
 def setup_logging():
     """Setup logging to both file and console."""
@@ -345,6 +382,9 @@ Quit: Press Ctrl+C in the terminal
     auto_paste = not args.no_paste
     append_enter_cr = not args.no_enter_cr
 
+    # Check for existing instance and kill it if found
+    check_single_instance()
+
     # Setup logging
     setup_logging()
 
@@ -406,6 +446,13 @@ Quit: Press Ctrl+C in the terminal
                 del kbd_controller
             except:
                 pass
+
+        # Clean up PID file
+        try:
+            if os.path.exists(PID_FILE):
+                os.remove(PID_FILE)
+        except:
+            pass
 
         print("Stopped.")
 
