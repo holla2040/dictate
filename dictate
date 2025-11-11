@@ -14,6 +14,7 @@ from pynput.keyboard import Controller as KeyboardController
 import time
 import logging
 from datetime import datetime
+import re
 
 # Configuration
 SAMPLE_RATE = 16000
@@ -204,8 +205,24 @@ def transcribe_audio():
                 result = model.transcribe(audio_array.flatten(), language="en", fp16=False)
                 text = result["text"].strip()
 
-                # Append carriage return by default (unless disabled)
-                if text and append_enter_cr:
+                # Check for verbal commands in the transcribed text
+                # Pattern matches: optional comma/punctuation, whitespace, command, optional punctuation
+                command_pattern = r'[,;]?\s*\b(no return|no enter|skip return|skip enter|no newline)\b[.,;!?]*'
+
+                should_suppress_return = False
+                match = re.search(command_pattern, text, re.IGNORECASE)
+                if match:
+                    should_suppress_return = True
+                    command_detected = match.group(1)
+                    # Remove the command and surrounding punctuation from the text
+                    text = re.sub(command_pattern, '', text, flags=re.IGNORECASE)
+                    # Clean up extra spaces
+                    text = re.sub(r'\s+', ' ', text).strip()
+                    logger.debug(f"Verbal command detected: '{command_detected}' - suppressing carriage return")
+                    logger.debug(f"Cleaned text: '{text}'")
+
+                # Append carriage return by default (unless disabled or suppressed by verbal command)
+                if text and append_enter_cr and not should_suppress_return:
                     text = text + "\r"
                     logger.debug(f"Appending carriage return to text")
 
