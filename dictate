@@ -420,15 +420,17 @@ Quit: Press Ctrl+C in the terminal
             notify("Dictate", "Ready! Hold Home key to record", "low")
 
             # Start global keyboard listener
-            try:
-                with keyboard.Listener(on_press=on_press, on_release=on_release, suppress=False) as listener:
-                    # Monitor the listener
-                    while listener.running and not stop_flag.is_set():
-                        stop_flag.wait(1)
+            listener = keyboard.Listener(on_press=on_press, on_release=on_release, suppress=False)
+            listener.start()
 
-                    listener.join()
-            except Exception as e:
+            try:
+                # Keep main thread responsive by using short sleeps instead of blocking
+                while listener.running:
+                    time.sleep(0.1)
+            except KeyboardInterrupt:
                 raise
+            finally:
+                listener.stop()
 
     except KeyboardInterrupt:
         print("\n\nStopping...")
