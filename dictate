@@ -447,6 +447,9 @@ Quit: Press Ctrl+C in the terminal
                 print("Auto carriage return: ENABLED - \\r appended to all text (use --no-enter-cr to disable)")
             else:
                 print("Auto carriage return: DISABLED")
+            print("Verbal commands:")
+            print("  'toggle return' / 'toggle enter' - toggle auto carriage return on/off")
+            print("  'no return' / 'no enter' / 'skip return' / 'skip enter' / 'no newline' - skip return for this dictation")
             print("Press Ctrl+C to quit\n")
 
             notify("Dictate", "Ready! Hold Home key to record", "low")
