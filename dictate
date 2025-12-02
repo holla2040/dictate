@@ -31,7 +31,7 @@ stop_flag = threading.Event()
 model = None
 use_notifications = True
 auto_paste = True
-append_enter_cr = True
+append_enter_cr = False
 kbd_controller = None
 target_window_id = None
 logger = None
@@ -392,10 +392,10 @@ Examples:
   dictate                # Run with default settings (Home key)
   dictate --no-notify    # Run without desktop notifications
   dictate --no-paste     # Copy to clipboard only, don't auto-paste
-  dictate --no-enter-cr  # Disable automatic carriage return (\\r)
+  dictate --enter-cr     # Enable automatic carriage return (\\r)
 
 Global Hotkey: Home key (press and hold to record, release to transcribe)
-Default Behavior: Carriage return (\\r) is automatically appended to all text
+Default Behavior: No carriage return (use --enter-cr to enable or toggle with verbal command)
 Quit: Press Ctrl+C in the terminal
         """
     )
@@ -403,8 +403,8 @@ Quit: Press Ctrl+C in the terminal
                        help='Disable desktop notifications')
     parser.add_argument('--no-paste', action='store_true',
                        help='Disable auto-paste (copy to clipboard only)')
-    parser.add_argument('--no-enter-cr', action='store_true',
-                       help='Disable automatic carriage return (\\r) appended to all text')
+    parser.add_argument('--enter-cr', action='store_true',
+                       help='Enable automatic carriage return (\\r) appended to all text')
     parser.add_argument('--model', default='base',
                        choices=['tiny', 'base', 'small', 'medium', 'large'],
                        help='Whisper model size (default: base)')
@@ -412,7 +412,7 @@ Quit: Press Ctrl+C in the terminal
     args = parser.parse_args()
     use_notifications = not args.no_notify
     auto_paste = not args.no_paste
-    append_enter_cr = not args.no_enter_cr
+    append_enter_cr = args.enter_cr
 
     # Check for existing instance and kill it if found
     check_single_instance()
@@ -444,9 +444,9 @@ Quit: Press Ctrl+C in the terminal
             else:
                 print("Auto-paste: DISABLED")
             if append_enter_cr:
-                print("Auto carriage return: ENABLED - \\r appended to all text (use --no-enter-cr to disable)")
+                print("Auto carriage return: ENABLED - \\r appended to all text")
             else:
-                print("Auto carriage return: DISABLED")
+                print("Auto carriage return: DISABLED (use --enter-cr to enable)")
             print("Verbal commands:")
             print("  'toggle return' / 'toggle enter' - toggle auto carriage return on/off")
             print("  'no return' / 'no enter' / 'skip return' / 'skip enter' / 'no newline' - skip return for this dictation")
