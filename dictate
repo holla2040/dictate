@@ -102,13 +102,14 @@ def setup_logging():
 
 def notify(title, message, urgency="normal"):
     """Send desktop notification using notify-send."""
-    if not use_notifications:
-        return
-    try:
-        subprocess.run(['notify-send', '-u', urgency, title, message],
-                      timeout=1, stderr=subprocess.DEVNULL)
-    except:
-        pass
+    # if not use_notifications:
+    #     return
+    # try:
+    #     subprocess.run(['notify-send', '-u', urgency, title, message],
+    #                   timeout=1, stderr=subprocess.DEVNULL)
+    # except:
+    #     pass
+    pass
 
 def paste_text(text):
     """Type or paste text into focused window."""
