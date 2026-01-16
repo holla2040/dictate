@@ -19,7 +19,7 @@ import re
 # Configuration
 SAMPLE_RATE = 16000
 BUFFER_SIZE = 1024
-DEFAULT_HOTKEY = '<home>'  # Home key (XF86HomePage)
+DEFAULT_HOTKEY = '<search>'  # Search key (XF86Search)
 LOG_FILE = os.path.expanduser('~/dictate.log')
 PID_FILE = os.path.expanduser('~/dictate.pid')
 
@@ -297,33 +297,25 @@ def on_press(key):
         if hasattr(key, 'vk'):
             logger.debug(f"  VK code: {hex(key.vk)}")
 
-        # Home key detection - check multiple ways
-        is_home_key = False
+        # Search key detection - check multiple ways
+        is_search_key = False
 
-        # Method 1: Check by virtual key code (XF86HomePage)
-        if hasattr(key, 'vk') and key.vk == 0x1008ff18:
-            is_home_key = True
-            logger.debug("  Home key detected by VK code")
+        # Method 1: Check by virtual key code (XF86Search)
+        if hasattr(key, 'vk') and key.vk == 0x1008ff1b:
+            is_search_key = True
+            logger.debug("  Search key detected by VK code")
 
         # Method 2: Check by string representation
         key_str = str(key)
-        if 'home' in key_str.lower() or 'xf86homepage' in key_str.lower():
-            is_home_key = True
-            logger.debug("  Home key detected by string representation")
+        if 'search' in key_str.lower() or 'xf86search' in key_str.lower():
+            is_search_key = True
+            logger.debug("  Search key detected by string representation")
 
-        # Method 3: Check if it's keyboard.Key.home
-        try:
-            if key == keyboard.Key.home:
-                is_home_key = True
-                logger.debug("  Home key detected by keyboard.Key.home")
-        except:
-            pass
-
-        if is_home_key:
+        if is_search_key:
             with recording_lock:
                 # Only start recording if not already recording (ignore key repeat)
                 if not is_recording:
-                    logger.info("HOME KEY PRESSED - Starting recording")
+                    logger.info("SEARCH KEY PRESSED - Starting recording")
                     # Capture the focused window NOW, before recording starts
                     try:
                         result = subprocess.run(['xdotool', 'getwindowfocus'],
@@ -350,30 +342,22 @@ def on_release(key):
         # Log key release for debugging
         logger.debug(f"Key released: {repr(key)} (type: {type(key).__name__})")
 
-        # Home key detection - check multiple ways (same as on_press)
-        is_home_key = False
+        # Search key detection - check multiple ways (same as on_press)
+        is_search_key = False
 
-        # Method 1: Check by virtual key code (XF86HomePage)
-        if hasattr(key, 'vk') and key.vk == 0x1008ff18:
-            is_home_key = True
-            logger.debug("  Home key detected by VK code")
+        # Method 1: Check by virtual key code (XF86Search)
+        if hasattr(key, 'vk') and key.vk == 0x1008ff1b:
+            is_search_key = True
+            logger.debug("  Search key detected by VK code")
 
         # Method 2: Check by string representation
         key_str = str(key)
-        if 'home' in key_str.lower() or 'xf86homepage' in key_str.lower():
-            is_home_key = True
-            logger.debug("  Home key detected by string representation")
+        if 'search' in key_str.lower() or 'xf86search' in key_str.lower():
+            is_search_key = True
+            logger.debug("  Search key detected by string representation")
 
-        # Method 3: Check if it's keyboard.Key.home
-        try:
-            if key == keyboard.Key.home:
-                is_home_key = True
-                logger.debug("  Home key detected by keyboard.Key.home")
-        except:
-            pass
-
-        if is_home_key:
-            logger.info("HOME KEY RELEASED - Stopping recording")
+        if is_search_key:
+            logger.info("SEARCH KEY RELEASED - Stopping recording")
             with recording_lock:
                 if is_recording:
                     is_recording = False
@@ -390,12 +374,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  dictate                # Run with default settings (Home key)
+  dictate                # Run with default settings (Search key)
   dictate --no-notify    # Run without desktop notifications
   dictate --no-paste     # Copy to clipboard only, don't auto-paste
   dictate --enter-cr     # Enable automatic carriage return (\\r)
 
-Global Hotkey: Home key (press and hold to record, release to transcribe)
+Global Hotkey: Search key (press and hold to record, release to transcribe)
 Default Behavior: No carriage return (use --enter-cr to enable or toggle with verbal command)
 Quit: Press Ctrl+C in the terminal
         """
@@ -439,7 +423,7 @@ Quit: Press Ctrl+C in the terminal
         with sd.InputStream(callback=audio_callback, channels=1,
                            samplerate=SAMPLE_RATE, blocksize=BUFFER_SIZE):
             print("\n🎤 Global Push-to-Talk Ready!")
-            print("Hold HOME KEY to record (works system-wide)")
+            print("Hold SEARCH KEY to record (works system-wide)")
             if auto_paste:
                 print("Auto-paste: ENABLED (use --no-paste to disable)")
             else:
@@ -453,7 +437,7 @@ Quit: Press Ctrl+C in the terminal
             print("  'no return' / 'no enter' / 'skip return' / 'skip enter' / 'no newline' - skip return for this dictation")
             print("Press Ctrl+C to quit\n")
 
-            notify("Dictate", "Ready! Hold Home key to record", "low")
+            notify("Dictate", "Ready! Hold Search key to record", "low")
 
             # Start global keyboard listener
             listener = keyboard.Listener(on_press=on_press, on_release=on_release, suppress=False)
