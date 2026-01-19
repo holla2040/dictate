@@ -78,7 +78,9 @@ def setup_logging():
     """Setup logging to both file and console."""
     global logger
     logger = logging.getLogger('dictate')
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.CRITICAL + 1)  # Disable all logging
+    logger.addHandler(logging.NullHandler())
+    return  # Logging disabled
 
     # File handler with detailed logs
     fh = logging.FileHandler(LOG_FILE)
