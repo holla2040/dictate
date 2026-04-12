@@ -20,6 +20,7 @@ import re
 SAMPLE_RATE = 16000
 BUFFER_SIZE = 1024
 DEFAULT_HOTKEY = '<search>'  # Search key (XF86Search)
+TYPE_DELAY_MS = 4  # ms between keystrokes for xdotool type (default was 12)
 LOG_FILE = os.path.expanduser('~/dictate.log')
 PID_FILE = os.path.expanduser('~/dictate.pid')
 
@@ -142,8 +143,8 @@ def paste_text(text):
                              timeout=2)
                 time.sleep(0.2)
 
-                # Directly type the text
-                result = subprocess.run(['xdotool', 'type', '--window', window_id, '--clearmodifiers', '--', text],
+                # Directly type the text (--delay in ms between keystrokes; default is 12)
+                result = subprocess.run(['xdotool', 'type', '--window', window_id, '--clearmodifiers', '--delay', str(TYPE_DELAY_MS), '--', text],
                                       capture_output=True,
                                       timeout=5)
 
