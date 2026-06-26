@@ -19,7 +19,7 @@ import re
 # Configuration
 SAMPLE_RATE = 16000
 BUFFER_SIZE = 1024
-DEFAULT_HOTKEY = '<search>'  # Search key (XF86Search)
+DEFAULT_HOTKEY = '<ctrl>+2'  # Ctrl+2
 TYPE_DELAY_MS = 4  # ms between keystrokes for xdotool type (default was 12)
 LOG_FILE = os.path.expanduser('~/dictate.log')
 PID_FILE = os.path.expanduser('~/dictate.pid')
@@ -38,6 +38,11 @@ target_window_id = None
 logger = None
 last_activity = None
 health_check_enabled = True
+ctrl_down = False  # tracks Ctrl modifier for the Ctrl+2 hotkey
+# Keys that count as the Ctrl modifier. caps_lock is included because a
+# Caps-Lock-remapped-to-Ctrl often still reports as Key.caps_lock to pynput.
+CTRL_KEYS = (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r,
+             keyboard.Key.ctrl, keyboard.Key.caps_lock)
 
 def check_single_instance():
     """Check if another instance is running and kill it if necessary."""
@@ -290,7 +295,7 @@ def health_check_thread():
 
 def on_press(key):
     """Handle global hotkey press."""
-    global is_recording, target_window_id, last_activity
+    global is_recording, target_window_id, last_activity, ctrl_down
 
     try:
         last_activity = time.time()
@@ -300,25 +305,21 @@ def on_press(key):
         if hasattr(key, 'vk'):
             logger.debug(f"  VK code: {hex(key.vk)}")
 
-        # Search key detection - check multiple ways
-        is_search_key = False
+        # Track Ctrl modifier
+        if key in CTRL_KEYS:
+            ctrl_down = True
+            return
 
-        # Method 1: Check by virtual key code (XF86Search)
-        if hasattr(key, 'vk') and key.vk == 0x1008ff1b:
-            is_search_key = True
-            logger.debug("  Search key detected by VK code")
+        # Ctrl+2 detection: '2' pressed while Ctrl is held.
+        # Ctrl can mangle .char, so also accept the vk for '2' (50).
+        is_two = getattr(key, 'char', None) == '2' or getattr(key, 'vk', None) == 50
+        is_hotkey = ctrl_down and is_two
 
-        # Method 2: Check by string representation
-        key_str = str(key)
-        if 'search' in key_str.lower() or 'xf86search' in key_str.lower():
-            is_search_key = True
-            logger.debug("  Search key detected by string representation")
-
-        if is_search_key:
+        if is_hotkey:
             with recording_lock:
                 # Only start recording if not already recording (ignore key repeat)
                 if not is_recording:
-                    logger.info("SEARCH KEY PRESSED - Starting recording")
+                    logger.info("CTRL+2 PRESSED - Starting recording")
                     # Capture the focused window NOW, before recording starts
                     try:
                         result = subprocess.run(['xdotool', 'getwindowfocus'],
@@ -337,7 +338,7 @@ def on_press(key):
 
 def on_release(key):
     """Handle global hotkey release."""
-    global is_recording, last_activity
+    global is_recording, last_activity, ctrl_down
 
     try:
         last_activity = time.time()
@@ -345,24 +346,18 @@ def on_release(key):
         # Log key release for debugging
         logger.debug(f"Key released: {repr(key)} (type: {type(key).__name__})")
 
-        # Search key detection - check multiple ways (same as on_press)
-        is_search_key = False
+        # Track Ctrl modifier release. Releasing Ctrl while recording also stops.
+        if key in CTRL_KEYS:
+            ctrl_down = False
 
-        # Method 1: Check by virtual key code (XF86Search)
-        if hasattr(key, 'vk') and key.vk == 0x1008ff1b:
-            is_search_key = True
-            logger.debug("  Search key detected by VK code")
+        # Stop on release of either Ctrl or '2'
+        is_two = getattr(key, 'char', None) == '2' or getattr(key, 'vk', None) == 50
+        is_ctrl = key in CTRL_KEYS
 
-        # Method 2: Check by string representation
-        key_str = str(key)
-        if 'search' in key_str.lower() or 'xf86search' in key_str.lower():
-            is_search_key = True
-            logger.debug("  Search key detected by string representation")
-
-        if is_search_key:
-            logger.info("SEARCH KEY RELEASED - Stopping recording")
+        if is_two or is_ctrl:
             with recording_lock:
                 if is_recording:
+                    logger.info("CTRL+2 RELEASED - Stopping recording")
                     is_recording = False
 
         # Note: ESC quit removed - use Ctrl+C in the terminal to quit
@@ -377,12 +372,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  dictate                # Run with default settings (Search key)
+  dictate                # Run with default settings (Ctrl+2)
   dictate --no-notify    # Run without desktop notifications
   dictate --no-paste     # Copy to clipboard only, don't auto-paste
   dictate --enter-cr     # Enable automatic carriage return (\\r)
 
-Global Hotkey: Search key (press and hold to record, release to transcribe)
+Global Hotkey: Ctrl+2 (press and hold to record, release to transcribe)
 Default Behavior: No carriage return (use --enter-cr to enable or toggle with verbal command)
 Quit: Press Ctrl+C in the terminal
         """
@@ -426,7 +421,7 @@ Quit: Press Ctrl+C in the terminal
         with sd.InputStream(callback=audio_callback, channels=1,
                            samplerate=SAMPLE_RATE, blocksize=BUFFER_SIZE):
             print("\n🎤 Global Push-to-Talk Ready!")
-            print("Hold SEARCH KEY to record (works system-wide)")
+            print("Hold Ctrl+2 to record (works system-wide)")
             if auto_paste:
                 print("Auto-paste: ENABLED (use --no-paste to disable)")
             else:
@@ -440,7 +435,7 @@ Quit: Press Ctrl+C in the terminal
             print("  'no return' / 'no enter' / 'skip return' / 'skip enter' / 'no newline' - skip return for this dictation")
             print("Press Ctrl+C to quit\n")
 
-            notify("Dictate", "Ready! Hold Search key to record", "low")
+            notify("Dictate", "Ready! Hold Ctrl+2 to record", "low")
 
             # Start global keyboard listener
             listener = keyboard.Listener(on_press=on_press, on_release=on_release, suppress=False)
