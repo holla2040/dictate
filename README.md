@@ -7,7 +7,7 @@ A system-wide push-to-talk voice transcription tool that uses OpenAI's Whisper m
 - **Global Hotkey**: Works from anywhere, no window focus required
 - **Push-to-Talk**: Hold Home key to record, release to transcribe
 - **Auto-Insert**: Automatically types transcribed text into focused window
-- **Clipboard Integration**: Also copies transcriptions to clipboard
+- **Clipboard-Safe**: Types text directly; your clipboard is left alone (used only with `--no-paste` or if typing fails)
 - **Desktop Notifications**: Visual feedback for recording/transcription status
 - **Multiple Model Sizes**: Choose speed vs accuracy tradeoff
 
@@ -49,7 +49,7 @@ dictate --no-paste         # Copy to clipboard only, don't auto-insert
 6. Release Home key
 7. Wait a moment for transcription
 8. Text is automatically typed into the focused window
-9. Text is also copied to clipboard for manual pasting
+9. Your clipboard is not touched
 
 ## Running in Background
 

@@ -124,9 +124,6 @@ def paste_text(text):
     global target_window_id
 
     try:
-        # Wait to ensure clipboard is fully updated
-        time.sleep(0.3)
-
         # Use the window captured at recording start
         window_id = target_window_id
         if not window_id:
@@ -251,27 +248,19 @@ def transcribe_audio():
                     logger.debug(f"Appending carriage return to text")
 
                 if text:
-                    # Copy text to clipboard using xclip
-                    try:
-                        subprocess.run(['xclip', '-selection', 'clipboard'],
-                                     input=text.encode(),
-                                     check=True,
-                                     timeout=2)
-                        # Also copy to primary selection
-                        subprocess.run(['xclip', '-selection', 'primary'],
-                                     input=text.encode(),
-                                     timeout=2)
-
-                        # Auto-paste if enabled
-                        if auto_paste:
-                            if paste_text(text):
-                                notify("Dictate", f"Inserted: {text[:50]}{'...' if len(text) > 50 else ''}")
-                            else:
-                                notify("Dictate", f"Copied: {text[:50]}{'...' if len(text) > 50 else ''}")
-                        else:
+                    # Type directly into the window; clipboard is untouched
+                    if auto_paste and paste_text(text):
+                        notify("Dictate", f"Inserted: {text[:50]}{'...' if len(text) > 50 else ''}")
+                    else:
+                        # --no-paste or typing failed: fall back to clipboard so the text isn't lost
+                        try:
+                            subprocess.run(['xclip', '-selection', 'clipboard'],
+                                         input=text.encode(),
+                                         check=True,
+                                         timeout=2)
                             notify("Dictate", f"Copied: {text[:50]}{'...' if len(text) > 50 else ''}")
-                    except Exception as e:
-                        notify("Dictate", "Failed to copy to clipboard", "critical")
+                        except Exception as e:
+                            notify("Dictate", "Failed to copy to clipboard", "critical")
                 else:
                     notify("Dictate", "No speech detected", "low")
             except Exception as e:
