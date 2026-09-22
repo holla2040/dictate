@@ -23,6 +23,8 @@ DEFAULT_HOTKEY = '<ctrl>+2'  # Ctrl+2
 TYPE_DELAY_MS = 4  # ms between keystrokes for xdotool type (default was 12)
 LOG_FILE = os.path.expanduser('~/dictate.log')
 PID_FILE = os.path.expanduser('~/dictate.pid')
+# Whisper mishears "Claude Code"; add new mishearings to the alternation as they show up
+CLAUDE_CODE_RE = re.compile(r'\b(?:cloud|clod|clud|clot|plot|klod|claud|claude|clawed|clawd)\s*code\b', re.IGNORECASE)
 
 # Global state
 audio_queue = queue.Queue()
@@ -209,7 +211,7 @@ def transcribe_audio():
 
             try:
                 result = model.transcribe(audio_array.flatten(), language="en", fp16=False)
-                text = result["text"].strip()
+                text = CLAUDE_CODE_RE.sub('Claude Code', result["text"].strip())
 
                 # Check for "toggle return" command first (modifies global state)
                 toggle_pattern = r'[,;]?\s*\b(toggle return|toggle enter)\b[.,;!?]*'
@@ -377,9 +379,9 @@ Quit: Press Ctrl+C in the terminal
                        help='Disable auto-paste (copy to clipboard only)')
     parser.add_argument('--enter-cr', action='store_true',
                        help='Enable automatic carriage return (\\r) appended to all text')
-    parser.add_argument('--model', default='base',
-                       choices=['tiny', 'base', 'small', 'medium', 'large'],
-                       help='Whisper model size (default: base)')
+    parser.add_argument('--model', default='base.en',
+                       choices=whisper.available_models(),
+                       help='Whisper model (default: base.en)')
 
     args = parser.parse_args()
     use_notifications = not args.no_notify

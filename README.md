@@ -22,7 +22,7 @@ sudo apt-get install xclip xdotool libportaudio2
 
 ### Basic Usage
 ```bash
-dictate                    # Run with default settings (base model)
+dictate                    # Run with default settings (base.en model)
 ```
 
 ### Options
@@ -31,6 +31,7 @@ dictate --model tiny       # Fastest, less accurate
 dictate --model small      # Better accuracy, slower
 dictate --model medium     # High accuracy, much slower
 dictate --model large      # Best accuracy, very slow
+dictate --model turbo      # Near-large accuracy, much faster than large (best with a GPU)
 dictate --no-notify        # Disable desktop notifications
 dictate --no-paste         # Copy to clipboard only, don't auto-insert
 ```
@@ -85,10 +86,13 @@ X-GNOME-Autostart-enabled=true
 | Model  | Speed      | Accuracy | RAM Usage | Use Case                    |
 |--------|------------|----------|-----------|----------------------------- |
 | tiny   | Very Fast  | Low      | ~1 GB     | Quick notes, testing        |
-| base   | Fast       | Good     | ~1 GB     | General use (default)       |
+| base   | Fast       | Good     | ~1 GB     | General use                 |
 | small  | Medium     | Better   | ~2 GB     | Important transcriptions    |
 | medium | Slow       | High     | ~5 GB     | Professional use            |
 | large  | Very Slow  | Best     | ~10 GB    | Maximum accuracy needed     |
+| turbo  | Medium     | Near-best| ~6 GB     | High accuracy, GPU recommended |
+
+`tiny`, `base`, `small` and `medium` also come in English-only `.en` variants (e.g. `base.en`, the default), which are more accurate for English at the same speed. Run `dictate --help` for the full list.
 
 ## Troubleshooting
 
